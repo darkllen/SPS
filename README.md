@@ -1,2 +1,2 @@
-# SPS
-Smart Parking System
+# SPS (Smart Parking System)
+[Project SRS](./docs/SRS.md)
