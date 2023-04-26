@@ -1,0 +1,6 @@
+aiomysql
+greenlet
+sqlalchemy
+alembic
+cryptography
+aio_pika
