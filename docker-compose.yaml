@@ -11,83 +11,85 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
   
-  mysql_master:
-    image: mysql:8.0
-    container_name: mysql_master
-    restart: always
+  pg_m:
+    image: postgres
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: mydb
-    ports:
-      - "6000:3306"
+      POSTGRES_PASSWORD: pass
     volumes:
-      - mysql_master_data:/var/lib/mysql
-    command: --server-id=1 --log-bin=mysql-bin --binlog-do-db=mydb --max_connections=10000
-
-  mysql_slave:
-    image: mysql:8.0
-    container_name: mysql_slave
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: mydb
-      MYSQL_MASTER_HOST: mysql_master
-      MYSQL_MASTER_PORT: 3306
-      MYSQL_MASTER_USER: root
-      MYSQL_MASTER_PASSWORD: rootpassword
+    - postgres_vol_master1:/var/lib/postgresql/data
+    - ./ms.conf:/var/lib/postgresql/data/postgresql.conf
     ports:
-      - "6001:3306"
+      - 6000:5432
+  pg_s:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: pass
     volumes:
-      - mysql_slave_data:/var/lib/mysql
-    command: --server-id=2 --log-bin=mysql-bin --binlog-do-db=mydb --relay-log=mysql-relay-bin --relay-log-info-repository=TABLE --slave-skip-errors=1062 --report-host=mysql_master --max_connections=10000
-
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    restart: always
-    depends_on:
-      - mysql_master
-    environment:
-      PMA_HOST: mysql_master
-      MYSQL_ROOT_PASSWORD: rootpassword
+    - postgres_vol_sla:/var/lib/postgresql/data
     ports:
-      - 8089:80
+      - 6001:5432
 
-  phpmyadmin_slave:
-    image: phpmyadmin/phpmyadmin
-    restart: always
-    depends_on:
-      - mysql_slave
-    environment:
-      PMA_HOST: mysql_slave
-      MYSQL_ROOT_PASSWORD: rootpassword
+  adminer:
+    image: adminer
+    links:
+      - pg_m
+      - pg_s
     ports:
-      - 8090:80
-
+      - 6004:8080
+      
   python-alembic-upgrade:
     build: app/
     depends_on:
-      - mysql_master
-      - mysql_slave
+      - pg_m
+      - pg_s
     command: bash -c "sleep 2 && alembic upgrade head"
 
   python-worker:
     build: app/
     environment:
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_QUEUE: myqueue
-      MYSQL_HOST: mysql-master
-      MYSQL_PORT: 3306
-      MYSQL_USER: myuser
-      MYSQL_PASSWORD: mypassword
-      MYSQL_DATABASE: mydatabase
+      DB_HOST: pg_m
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_NAME: postgres
+      DB_PASSWORD: pass
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: 5672
+      RABBIT_USER: guest
+      RABBIT_PASSWORD: guest
     depends_on:
       - python-alembic-upgrade
-      - mysql_slave
+      - pg_m
       - rabbitmq
     command: bash -c "sleep 12 && python worker/worker.py"
 
+  python-api:
+    build: app/
+    environment:
+      DB_HOST: pg_m
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_NAME: postgres
+      DB_PASSWORD: pass
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: 5672
+      RABBIT_USER: guest
+      RABBIT_PASSWORD: guest
+    depends_on:
+      - python-alembic-upgrade
+      - pg_m
+      - rabbitmq
+    command: bash -c "sleep 12 && cd api/ && uvicorn api:app --host=0.0.0.0"
+
+  nginx:
+      image: nginx:latest
+      volumes:
+        - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      depends_on:
+        - python-api
+      ports:
+        - "8000:8000"
+
 volumes:
-  mysql_master_data:
-  mysql_slave_data:
+  postgres_vol_master1:
+  postgres_vol_sla:
   rabbitmq_data:
