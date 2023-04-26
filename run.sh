@@ -1,0 +1,1 @@
+docker-compose up --scale python-worker=2 --build

@@ -1,0 +1,93 @@
+version: '3'
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+  
+  mysql_master:
+    image: mysql:8.0
+    container_name: mysql_master
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: mydb
+    ports:
+      - "6000:3306"
+    volumes:
+      - mysql_master_data:/var/lib/mysql
+    command: --server-id=1 --log-bin=mysql-bin --binlog-do-db=mydb --max_connections=10000
+
+  mysql_slave:
+    image: mysql:8.0
+    container_name: mysql_slave
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: mydb
+      MYSQL_MASTER_HOST: mysql_master
+      MYSQL_MASTER_PORT: 3306
+      MYSQL_MASTER_USER: root
+      MYSQL_MASTER_PASSWORD: rootpassword
+    ports:
+      - "6001:3306"
+    volumes:
+      - mysql_slave_data:/var/lib/mysql
+    command: --server-id=2 --log-bin=mysql-bin --binlog-do-db=mydb --relay-log=mysql-relay-bin --relay-log-info-repository=TABLE --slave-skip-errors=1062 --report-host=mysql_master --max_connections=10000
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    restart: always
+    depends_on:
+      - mysql_master
+    environment:
+      PMA_HOST: mysql_master
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - 8089:80
+
+  phpmyadmin_slave:
+    image: phpmyadmin/phpmyadmin
+    restart: always
+    depends_on:
+      - mysql_slave
+    environment:
+      PMA_HOST: mysql_slave
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - 8090:80
+
+  python-alembic-upgrade:
+    build: app/
+    depends_on:
+      - mysql_master
+      - mysql_slave
+    command: bash -c "sleep 2 && alembic upgrade head"
+
+  python-worker:
+    build: app/
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_QUEUE: myqueue
+      MYSQL_HOST: mysql-master
+      MYSQL_PORT: 3306
+      MYSQL_USER: myuser
+      MYSQL_PASSWORD: mypassword
+      MYSQL_DATABASE: mydatabase
+    depends_on:
+      - python-alembic-upgrade
+      - mysql_slave
+      - rabbitmq
+    command: bash -c "sleep 12 && python worker/worker.py"
+
+volumes:
+  mysql_master_data:
+  mysql_slave_data:
+  rabbitmq_data:
