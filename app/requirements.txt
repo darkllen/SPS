@@ -1,6 +1,11 @@
-aiomysql
+psycopg
 greenlet
 sqlalchemy
 alembic
 cryptography
 aio_pika
+pydantic
+python-dotenv
+pytz
+fastapi
+uvicorn

@@ -7,7 +7,7 @@ from time import sleep
 async def send_message():
     p = 100  # number of cities
     s = 1000
-    n = 1000  # number of messages in sec
+    n = 100  # number of messages in sec
     u = 100  # number of users
         
     # Connect to the RabbitMQ server
