@@ -35,7 +35,7 @@ class Event(Base):
     event_name = Column(EVENT_NAME_ENUM, nullable=False)
     created_at = Column(DateTime, nullable=False, default=text('(now())'))
     data = Column(JSONB, nullable=False)
-    sensor: Mapped["Sensor"] = relationship()
+    sensor: Mapped["Sensor"] = relationship("Sensor")
 
     __table_args__ = (Index('ix_data_gin', data, postgresql_using="gin"), )
 

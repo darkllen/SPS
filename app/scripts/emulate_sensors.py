@@ -61,7 +61,7 @@ async def send_message():
     await connection.close()
 async def main():
 
-    num_threads = 128  # number of threads to use
+    num_threads = 64  # number of threads to use
 
     # Create a list of coroutines to run
     coroutines = [send_message() for _ in range(num_threads)]

@@ -26,8 +26,10 @@ services:
       POSTGRES_PASSWORD: pass
     volumes:
     - postgres_vol_sla:/var/lib/postgresql/data
+    - ./ms.conf:/var/lib/postgresql/data/postgresql.conf
     ports:
       - 6001:5432
+
 
   adminer:
     image: adminer
@@ -37,12 +39,20 @@ services:
     ports:
       - 6004:8080
       
-  python-alembic-upgrade:
+  python-alembic-upgrade-m:
     build: app/
     depends_on:
       - pg_m
       - pg_s
-    command: bash -c "sleep 2 && alembic upgrade head"
+    command: bash -c "sleep 15 && alembic -n master upgrade head"
+
+  python-alembic-upgrade-s:
+    build: app/
+    depends_on:
+      - pg_m
+      - pg_s
+    command: bash -c "sleep 15 && alembic -n slave upgrade head"
+
 
   python-worker:
     build: app/
@@ -57,15 +67,15 @@ services:
       RABBIT_USER: guest
       RABBIT_PASSWORD: guest
     depends_on:
-      - python-alembic-upgrade
+      - python-alembic-upgrade-m
       - pg_m
       - rabbitmq
-    command: bash -c "sleep 12 && python worker/worker.py"
+    command: bash -c "sleep 20 && python worker/worker.py"
 
   python-api:
     build: app/
     environment:
-      DB_HOST: pg_m
+      DB_HOST: pg_s
       DB_PORT: 5432
       DB_USER: postgres
       DB_NAME: postgres
@@ -75,10 +85,10 @@ services:
       RABBIT_USER: guest
       RABBIT_PASSWORD: guest
     depends_on:
-      - python-alembic-upgrade
+      - python-alembic-upgrade-s
       - pg_m
       - rabbitmq
-    command: bash -c "sleep 12 && cd api/ && uvicorn api:app --host=0.0.0.0"
+    command: bash -c "sleep 20 && uvicorn api:app --host=0.0.0.0 --app-dir=api/"
 
   nginx:
       image: nginx:latest
