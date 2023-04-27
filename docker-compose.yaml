@@ -44,14 +44,14 @@ services:
     depends_on:
       - pg_m
       - pg_s
-    command: bash -c "sleep 15 && alembic -n master upgrade head"
+    command: bash -c "sleep 7 && alembic -n master upgrade head"
 
   python-alembic-upgrade-s:
     build: app/
     depends_on:
       - pg_m
       - pg_s
-    command: bash -c "sleep 15 && alembic -n slave upgrade head"
+    command: bash -c "sleep 7 && alembic -n slave upgrade head"
 
 
   python-worker:
@@ -66,11 +66,16 @@ services:
       RABBIT_PORT: 5672
       RABBIT_USER: guest
       RABBIT_PASSWORD: guest
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USER: redis
+      REDIS_PASSWORD: pass
     depends_on:
       - python-alembic-upgrade-m
       - pg_m
       - rabbitmq
-    command: bash -c "sleep 20 && python worker/worker.py"
+      - redis
+    command: bash -c "sleep 12 && python worker/worker.py"
 
   python-api:
     build: app/
@@ -84,11 +89,16 @@ services:
       RABBIT_PORT: 5672
       RABBIT_USER: guest
       RABBIT_PASSWORD: guest
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USER: redis
+      REDIS_PASSWORD: pass
     depends_on:
       - python-alembic-upgrade-s
       - pg_m
       - rabbitmq
-    command: bash -c "sleep 20 && uvicorn api:app --host=0.0.0.0 --app-dir=api/"
+      - redis
+    command: bash -c "sleep 12 && uvicorn api:app --host=0.0.0.0 --app-dir=api/"
 
   nginx:
       image: nginx:latest
@@ -99,7 +109,24 @@ services:
       ports:
         - "8000:8000"
 
+  redis:
+    image: redis
+    command:
+      - bash
+      - -c
+      - redis-server --appendonly yes --maxmemory 900M --maxmemory-policy volatile-lru --requirepass pass
+    ports:
+      - '6379:6379'
+    volumes: 
+      - redis_vol:/data
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+
 volumes:
   postgres_vol_master1:
   postgres_vol_sla:
   rabbitmq_data:
+  redis_vol:

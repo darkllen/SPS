@@ -10,3 +10,4 @@ pytz
 fastapi
 uvicorn
 requests
+redis[hiredis]
